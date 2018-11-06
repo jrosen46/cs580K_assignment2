@@ -1,0 +1,106 @@
+Task II
+-------
+Q1. The controller starts by receiving a packet_in message from a switch, which
+will happen on a flow table miss. For this simple example of a `dumb`
+controller, all packets will be flow table misses because we are not installing
+any rules in the switch flow tables. The controller passes both the `packet`
+(`event.parsed`) and the `packet_in` (event.ofp) as arguments to
+`act_like_hub`. `act_like_hub` just resends this packet out of the switch on
+all ports except the input port. It does this by calling the function
+`resend_packet`, and passes the arguments `packet_in` and the constant
+`of.OFPP_ALL`, which means 'flood packet on all ports except input port'. The
+function `resend_packet` first creates an `oft_packet_out` message, which is a
+message used to instruct a switch to send a packet. The controller constructs
+a packet and sets the `data` that it would like the switch to send (which
+was the data in the original packet sent to the controller). It then creates
+the `ofp_action_output` and passes the port as an argument, which in this case
+is the constant for all ports. This `ofp_action_output` is added to the
+`ofp_packet_out` message so the switch actually knows what to do with it.
+Finally, the controller sends this message to the switch with the `send`
+function call.
+
+* draw function call graph here ...
+
+Q2. On average it takes 30.563ms for h1 to ping h2, while it takes 48.987ms for
+h1 to ping h8. This is because there are a lot more switches to go through
+before h1 reaches h8. In the first case (h1 to h2), packets only need to travel
+to s1, then to controller, then back down to s1, then to h2. In the second case
+(h1 to h8), packets need to travel to s1, then to controller, then back down to
+s1, then to s5, then to controller, then back down to s5, then to s7, then to
+controller, then back down to s7, then to s6, then to controller, then back
+down to s6, then to s4, then to controller, then back down to s4, then finally
+to h8.
+
+Question I have
+---------------
+****I am still not really sure why the time it takes is not 5-6x as long
+for h1 to h8 as opposed to h1 to h2. ****
+
+Q3. iperf is used to benchmark/measure the bandwidth of a network.
+Here are the results when we use iperf to test the bandwidth b/t the
+following pairs of hosts on the 'hub controller':
+    iperf h1 h2 -> tcp bandwidth = [5.66 Mbits/sec, 6.59 Mbits/sec]
+    iperf h1 h8 -> tcp bandwidth = [2.39 Mbits/sec, 2.92 Mbits/sec]
+The difference between the two is not that big. Again, since every message must
+go to the controller, the network is flooded with unnecessary packets. The
+bandwidth is higher for h1 -> h8 because with TCP, a response is needed, and
+packets need to travel further to get from h1->h8->h1, as opposed to
+h1->h2->h1.
+
+Q4. Whenever a packet passes through a switch, the switch communicates with the
+controller. We can therefore print out the `packet.src` field (which gives the
+mac address of the switch), and compare it to the mac addresses of the switches
+that we can obtain from using the `ifconfig` command at the mininet prompt. We
+can also keep a counter for each of the switches to see which switches observe
+the most traffic. *refer to of_tutorial.py for the code that is added.
+
+What is the difference between TCP bandwidth and any other type of bandwidth?
+Why would the TCP bandwith be lower when we ping h1->h8 as opposed to when we
+ping h1->h2? I understand that when we go from 1->8 there is a lot more trips
+to the controller before we actually reach the final destination, but in both
+instances, packets are flooded to every switch. If we have a continual stream
+of packets, wouldn't the actual bandwith be the same for both pairs of hosts.
+
+
+# TODO: double check the dpid command in the console.
+
+Q4. We can log the 'connection.dpid' of the Tutorial objects whenever they
+receive a packet. We can then match up the 'dpid' with those from running the
+command `py s1.dpid` (do this for every switch) to make sure that we know which
+dpid corresponds to which switch (they usually go in order, so dpid 1
+corresponds to s1, dpid 2 corresponds to s2, etc.)
+So the workflow goes like this:
+We open up two terminals. In one of them, we start the controller with the
+command `./pox.py log.level --DEBUG misc.of_tutorial > output.txt`. It is
+important that we send the output to a file, because we will be parsing it with
+the script 'parse_traffic.py'.  Then in the other terminal we start mininet
+with the command `mn --custom binary_tree.py --controller remote --topo mytopo`. Once
+in the mininet console, we check the dpid of all 7 switches with the command `py s*.dpid`.
+We then run the parse_traffic.py script on the output.txt file, which will give us a count
+of the packets received by each dpid number. This is how we can observe traffic for each switch.
+
+How do we get the MAC Address of the switches?
+
+How come there are a lot of messages even when I don't ping any of the hosts? Why do packets still get sent around? This makes it difficult to monitor which switches see traffic if there are a lot of random packets being sent around.
+
+
+Task III
+--------
+Q1. It first adds the packet's source MAC address to a mapping of mac-->port.
+Truthfully, the code does not even need to check if the packet.src is even in
+the mapping already, because it would cause no harm if we added it to the
+python dict and it was already there (i.e. we could just do
+`self.mac_to_port[packet.src] = packet_in.in_port` without checking first.) The
+code then checks to see if we know the port for the destination MAC address. If
+we do, the controller can just direct the switch to send the packet directly to
+that port. If we do not, then the controller sends a message to flood all
+outgoing ports (except the port that the packet came in on). This process can
+be shown as follows: If we ping h1 to h2 once, we will see traffic on all
+switches. However, the second time that we do it, we will only see traffic on
+the first switch. This is because for the second time, h1 sends a packet to s1,
+and then the controller will check the MAC to port mapping, see that the
+destination MAC (h2's) is already in there, and send it directly to h2.
+
+Q2.
+
+Q3. The throughput is much higher.
